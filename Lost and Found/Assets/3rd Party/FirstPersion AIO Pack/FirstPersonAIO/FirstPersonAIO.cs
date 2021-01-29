@@ -73,6 +73,7 @@ public class FirstPersonAIO : MonoBehaviour {
 
     #region Input Settings
     public bool controllerPauseState = false;
+    private Vector3 inputForward;
     #endregion
 
     #region Look Settings
@@ -125,6 +126,7 @@ public class FirstPersonAIO : MonoBehaviour {
     internal float walkSpeedInternal;
     internal float sprintSpeedInternal;
     internal float jumpPowerInternal;
+    private RaycastHit hit;
 
     [System.Serializable]
     public class CrouchModifiers {
@@ -168,6 +170,7 @@ public class FirstPersonAIO : MonoBehaviour {
     float yVelocity;
     float checkedSlope;
     bool isSprinting = false;
+    bool isWallRiding;
 
     public Rigidbody fps_Rigidbody;
 
@@ -322,10 +325,11 @@ public class FirstPersonAIO : MonoBehaviour {
         advanced.highFrictionMaterial.staticFriction =1;
         advanced.highFrictionMaterial.frictionCombine = PhysicMaterialCombine.Maximum;
         advanced.highFrictionMaterial.bounceCombine = PhysicMaterialCombine.Average;
+        inputForward = Vector3.ProjectOnPlane(playerCamera.transform.forward, Vector3.up);
         #endregion
 
         #region Headbobbing Settings - Start
-        
+
         originalLocalPosition = snapHeadjointToCapsul ? new Vector3(head.localPosition.x, (capsule.height/2)*head.localScale.y ,head.localPosition.z) : head.localPosition;
         if(GetComponent<AudioSource>() == null) { gameObject.AddComponent<AudioSource>(); }
 
@@ -367,8 +371,16 @@ public class FirstPersonAIO : MonoBehaviour {
             jumpInput = true;
         }else if(Input.GetButtonUp("Jump")){jumpInput = false;}
         
-        
-        if(_crouchModifiers.useCrouch){
+        if (Input.GetButton("Jump") && fps_Rigidbody.velocity.y < 0f)
+        {
+            advanced.gravityMultiplier = 0.3f;
+        }
+        else
+        {
+            advanced.gravityMultiplier = 1f;
+        }
+
+        if (_crouchModifiers.useCrouch){
             if(!_crouchModifiers.toggleCrouch){ isCrouching = _crouchModifiers.crouchOverride || Input.GetKey(_crouchModifiers.crouchKey);}
             else if(Input.GetKeyDown(_crouchModifiers.crouchKey)){isCrouching = !isCrouching || _crouchModifiers.crouchOverride;}
             }
@@ -386,6 +398,15 @@ public class FirstPersonAIO : MonoBehaviour {
 
     }
 
+    //IEnumerator FlipCamera(bool forward, Vector3 direction)
+    //{
+    //    if (forward)
+    //    {
+    //        enableCameraMovement = false;
+
+    //    }
+    //}
+
     private void FixedUpdate(){
 
         #region Look Settings - FixedUpdate
@@ -393,7 +414,38 @@ public class FirstPersonAIO : MonoBehaviour {
         #endregion
 
         #region Movement Settings - FixedUpdate
+
+        print(isWallRiding);
+        Debug.DrawRay(transform.position, inputForward * 5f);
         
+        if (!isWallRiding)
+        {
+            inputForward = Vector3.ProjectOnPlane(playerCamera.transform.forward, Vector3.up);
+            if (Physics.Raycast(transform.position, inputForward, out hit, capsule.radius + 0.1f, LayerMask.GetMask("Ground")))
+            {
+                isWallRiding = true;
+                fps_Rigidbody.useGravity = false;
+                Vector3 velocity = fps_Rigidbody.velocity;
+                velocity.y = -2f;
+                fps_Rigidbody.velocity = velocity;
+            }
+        }
+        else
+        {
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                print("BOOM!");
+                isWallRiding = false;
+                fps_Rigidbody.useGravity = true;
+                Vector3 normal = hit.normal;
+                float targetAngle = 45f;
+                Vector3 targetVector = Quaternion.AngleAxis(targetAngle, Vector3.Cross(normal, Vector3.up)) * normal;
+                Debug.DrawRay(transform.position, targetVector * 5f);
+                fps_Rigidbody.velocity = targetVector * jumpPower * speed / 2f;
+            }
+        }
+        
+
         if(useStamina){
             isSprinting = Input.GetKey(sprintKey) && !isCrouching && staminaInternal > 0 && (Mathf.Abs(fps_Rigidbody.velocity.x) > 0.01f || Mathf.Abs(fps_Rigidbody.velocity.z) > 0.01f);
             if(isSprinting){
@@ -436,6 +488,11 @@ public class FirstPersonAIO : MonoBehaviour {
         }
         else{
         MoveDirection = (transform.forward * inputXY.y * speed + transform.right * inputXY.x * walkSpeedInternal);
+        }
+
+        if (isWallRiding)
+        {
+            MoveDirection = Vector3.zero;
         }
 
         
