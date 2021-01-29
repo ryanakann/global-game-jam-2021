@@ -371,7 +371,7 @@ public class FirstPersonAIO : MonoBehaviour {
             jumpInput = true;
         }else if(Input.GetButtonUp("Jump")){jumpInput = false;}
         
-        if (Input.GetButton("Jump") && fps_Rigidbody.velocity.y < 0f)
+        if (Input.GetButton("Jump") && fps_Rigidbody.velocity.y < 0f && !isWallRiding)
         {
             advanced.gravityMultiplier = 0.3f;
         }
